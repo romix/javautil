@@ -1,5 +1,8 @@
 package org.clapper.util.classutil;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Holds information about a field within a class.
  *
@@ -16,6 +19,7 @@ public class FieldInfo
     private String description = null;
     private String signature = null;
     private Object value = null;
+	private List<AnnotationInfo>      annotations = new ArrayList<AnnotationInfo>(); 
 
     /*----------------------------------------------------------------------*\
                                 Constructor
@@ -104,7 +108,29 @@ public class FieldInfo
         return value;
     }
 
-    /**
+    public void addAnnotation(AnnotationInfo annotation)
+	{
+		annotations.add(annotation);
+	}
+
+	public List<AnnotationInfo> getAnnotations()
+	{
+		return annotations;
+	}
+
+	public boolean isAnnotationPresent(String desc) {
+		AnnotationInfo ann = new AnnotationInfo();
+		ann.setClassName(desc);
+		return annotations.contains(ann);
+	}
+
+	public boolean isAnnotationPresent(Class<?> clazz) {
+		AnnotationInfo ann = new AnnotationInfo();
+		ann.setClassName(clazz.getName());
+		return annotations.contains(ann);
+	}
+
+	/**
      * Get the hash code. The hash code is based on the field's name.
      *
      * @return the hash code

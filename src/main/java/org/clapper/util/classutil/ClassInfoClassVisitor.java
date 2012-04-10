@@ -46,11 +46,12 @@
 
 package org.clapper.util.classutil;
 
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.commons.EmptyVisitor;
 
 import java.io.File;
+import java.util.BitSet;
 import java.util.Map;
 
 /**
@@ -66,15 +67,26 @@ import java.util.Map;
  *
  * @see ClassFinder
  */
-class ClassInfoClassVisitor extends EmptyVisitor
+class ClassInfoClassVisitor extends ClassDataPreservingClassVisitor
 {
     /*----------------------------------------------------------------------*\
                             Private Data Items
     \*----------------------------------------------------------------------*/
 
-    private Map<String,ClassInfo> foundClasses;
+
+	private Map<String,ClassInfo> foundClasses;
     private File                  location;
     private ClassInfo             currentClass = null;
+    private BitSet 				  currentlyProcessing = new BitSet(4);
+    private BitSet 				  lastProcessing = null;
+    private AnnotationInfo        currentAnnotation;
+    private FieldInfo             currentField = null;
+    private MethodInfo            currentMethod = null;
+
+	protected static final int PROCESSING_FIELD = 1;
+	protected static final int PROCESSING_METHOD = 2;
+	protected static final int PROCESSING_CLASS = 3;
+	protected static final int PROCESSING_PARAM = 4;
 
     /*----------------------------------------------------------------------*\
                                Constructor
@@ -124,10 +136,24 @@ class ClassInfoClassVisitor extends EmptyVisitor
                                             interfaces,
                                             access,
                                             location);
+		classInfo.setBytecode(getBytecode());
         // Be sure to use the converted name from classInfo.getName(), not
         // the internal value in "name".
         foundClasses.put(classInfo.getClassName(), classInfo);
         currentClass = classInfo;
+        currentlyProcessing.set(PROCESSING_CLASS);
+    }
+
+    /**
+     * We get annotation values in this method, but have to track the current context.
+     */
+    @Override
+    public void visit(String name, Object value)
+    {
+        if (currentAnnotation != null)
+        {
+            currentAnnotation.getParams().add(new AnnotationInfo.NameValue(name, value));
+        }
     }
 
     /**
@@ -151,8 +177,12 @@ class ClassInfoClassVisitor extends EmptyVisitor
         assert (currentClass != null);
         if (signature == null)
             signature = description + " " + name;
-        return currentClass.visitField(access, name, description,
+        currentClass.visitField(access, name, description,
                                        signature, value);
+        currentlyProcessing.set(PROCESSING_FIELD);
+        currentField = currentClass.getFields().lastElement();
+        return this;
+
     }
 
     /**
@@ -176,8 +206,12 @@ class ClassInfoClassVisitor extends EmptyVisitor
         assert (currentClass != null);
         if (signature == null)
             signature = name + description;
-        return currentClass.visitMethod(access, name, description,
+        currentClass.visitMethod(access, name, description,
                                         signature, exceptions);
+        currentlyProcessing.set(PROCESSING_METHOD);
+        currentMethod = currentClass.getMethods().lastElement();
+        return this;
+
     }
 
     /**
@@ -189,5 +223,80 @@ class ClassInfoClassVisitor extends EmptyVisitor
     public File getClassLocation()
     {
         return location;
+    }
+
+    @Override
+	public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
+        assert (currentClass != null);
+		currentClass.visitAnnotation(desc, visible);
+		// are we processing anything currently? If not w'ere looking at another annotation on the same class element
+        if (currentlyProcessing.nextSetBit(0) < 0)
+        {
+            if(lastProcessing!=null)
+            {
+                currentlyProcessing = lastProcessing;
+            }
+            else
+            {
+                return this;
+            }
+        }
+
+        currentAnnotation = new AnnotationInfo();
+        currentAnnotation.setClassName(getAnnotationClassName(desc));
+        return this;
+	}
+
+//	@Override
+//	public AnnotationVisitor visitAnnotation(String name, String desc) {
+//        assert (currentClass != null);
+//		return currentClass.visitAnnotation(name, desc);
+//	}
+//
+//	@Override
+//	public AnnotationVisitor visitAnnotationDefault() {
+//        assert (currentClass != null);
+//		return currentClass.visitAnnotationDefault();
+//	}
+
+	@Override
+    public AnnotationVisitor visitParameterAnnotation(final int parameter, final String desc, final boolean visible)
+    {
+        currentAnnotation = new AnnotationInfo();
+        currentAnnotation.setClassName(getAnnotationClassName(desc));
+        currentlyProcessing.set(PROCESSING_PARAM);
+        return this;
+    }
+
+	public String getAnnotationClassName(String rawName)
+    {
+        return rawName.substring(1, rawName.length() - 1).replace('/', '.');
+    }
+	@Override
+    public void visitEnd()
+    {
+        if (currentAnnotation != null)
+        {
+
+            if (currentlyProcessing.get(PROCESSING_CLASS))
+            {
+                currentClass.addAnnotation(currentAnnotation);
+            }
+            else if (currentlyProcessing.get(PROCESSING_FIELD))
+            {
+                currentField.addAnnotation(currentAnnotation);
+            }
+//            else if (currentlyProcessing.get(PROCESSING_PARAM))
+//            {
+//                currentParam.add(currentAnnotation);
+//            }
+            else if (currentlyProcessing.get(PROCESSING_METHOD))
+            {
+                currentMethod.addAnnotation(currentAnnotation);
+            }
+            currentAnnotation = null;
+        }
+        lastProcessing = (BitSet)currentlyProcessing.clone();
+        currentlyProcessing.clear();
     }
 }

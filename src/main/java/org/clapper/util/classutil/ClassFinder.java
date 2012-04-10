@@ -48,6 +48,7 @@ package org.clapper.util.classutil;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -671,7 +672,24 @@ public class ClassFinder
     {
         try
         {
-            ClassReader cr = new ClassReader (is);
+            // Read bytecode into a byte array
+			byte[] bytecode = null;
+			ByteArrayOutputStream bos = new ByteArrayOutputStream(); 
+			byte[] tmp = new byte[4096];
+			int avail = 0;
+			
+			while((avail = is.available())>0) {
+				if(avail > tmp.length)
+					avail = tmp.length;
+				int readBytesCount = is.read(tmp, 0, avail);
+				if(readBytesCount>0)
+					bos.write(tmp, 0, readBytesCount);
+			}
+			
+			bytecode = bos.toByteArray(); 
+			ClassReader cr = new ClassReader (bytecode);
+			// Visitor should know which bytecode it parses
+			((ClassDataPreservingClassVisitor)classVisitor).setBytecode(bytecode);
             cr.accept(classVisitor, ClassInfo.ASM_CR_ACCEPT_CRITERIA);
         }
 

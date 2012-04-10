@@ -1,5 +1,10 @@
 package org.clapper.util.classutil;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.objectweb.asm.Type;
+
 /**
  * Holds information about a method within a class.
  *
@@ -16,6 +21,8 @@ public class MethodInfo implements Comparable<MethodInfo>
     private String description = null;
     private String signature = null;
     private String[] exceptions = null;
+	private ClassInfo declaringClass = null;
+	private List<AnnotationInfo>      annotations = new ArrayList<AnnotationInfo>(); 
 
     /*----------------------------------------------------------------------*\
                                 Constructor
@@ -41,13 +48,17 @@ public class MethodInfo implements Comparable<MethodInfo>
                       String name,
                       String description,
                       String signature,
-                      String[] exceptions)
+                      String[] exceptions,
+					  ClassInfo declaringClass)
     {
         this.access = access;
         this.name = name;
         this.description = description;
+		if (signature != null && signature.startsWith("(") && name != null)
+			signature = name + signature;
         this.signature = signature;
         this.exceptions = exceptions;
+		this.declaringClass = declaringClass;
     }
 
     /*----------------------------------------------------------------------*\
@@ -103,6 +114,38 @@ public class MethodInfo implements Comparable<MethodInfo>
     {
         return exceptions;
     }
+	
+    /**
+     * Get the method's declaring class.
+     *
+     * @return the method declaring class, or null.
+     */
+    public ClassInfo getDeclaringClass()
+    {
+        return declaringClass;
+    }
+	
+	public void addAnnotation(AnnotationInfo annotation)
+	{
+		annotations.add(annotation);
+	}
+
+	public List<AnnotationInfo> getAnnotations()
+	{
+		return annotations;
+	}
+	
+	public boolean isAnnotationPresent(String desc) {
+		AnnotationInfo ann = new AnnotationInfo();
+		ann.setClassName(desc);
+		return annotations.contains(ann);
+	}
+
+	public boolean isAnnotationPresent(Class<?> clazz) {
+		AnnotationInfo ann = new AnnotationInfo();
+		ann.setClassName(clazz.getName());
+		return annotations.contains(ann);
+	}
 
     /**
      * Get the hash code. The hash code is based on the field's signature.
@@ -112,7 +155,7 @@ public class MethodInfo implements Comparable<MethodInfo>
     @Override
     public int hashCode()
     {
-        return signature.hashCode();
+        return signature.hashCode() + declaringClass.getClassName().hashCode();
     }
 
     /**
@@ -146,7 +189,9 @@ public class MethodInfo implements Comparable<MethodInfo>
         boolean result;
 
         if (other instanceof MethodInfo)
-            result = compareTo((MethodInfo) other) == 0;
+			result = compareTo((MethodInfo) other) == 0
+					&& declaringClass.getClassName().equals(
+							((MethodInfo) other).declaringClass.getClassName());
         else
             result = false;
 
@@ -162,6 +207,9 @@ public class MethodInfo implements Comparable<MethodInfo>
      */
     public String toString()
     {
-        return (signature != null) ? signature : name;
+        if(declaringClass != null)
+        	return declaringClass.getClassName()+"."+((signature != null) ? signature : name);
+        else
+        	return (signature != null) ? signature : name;
     }
 }

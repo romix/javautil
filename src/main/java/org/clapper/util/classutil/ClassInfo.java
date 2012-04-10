@@ -53,11 +53,16 @@ import java.io.InputStream;
 
 import java.lang.reflect.Modifier;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.Vector;
 
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.EmptyVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
@@ -77,7 +82,8 @@ import org.objectweb.asm.Opcodes;
  */
 public class ClassInfo extends EmptyVisitor
 {
-    static int ASM_CR_ACCEPT_CRITERIA = 0;
+
+	static int ASM_CR_ACCEPT_CRITERIA = 0;
 
     /*----------------------------------------------------------------------*\
                             Private Data Items
@@ -85,11 +91,14 @@ public class ClassInfo extends EmptyVisitor
 
     private int             modifier = 0;
     private String          className = null;
+    private String          packageName = null;
     private String          superClassName = null;
     private String[]        implementedInterfaces = null;
     private File            locationFound = null;
-    private Set<FieldInfo>  fields = new HashSet<FieldInfo>();
-    private Set<MethodInfo> methods = new HashSet<MethodInfo>();
+    private Vector<FieldInfo>  fields = new Vector<FieldInfo>();
+    private Vector<MethodInfo> methods = new Vector<MethodInfo>();
+	private byte[]			bytecode = null;
+	private List<AnnotationInfo>      annotations = new ArrayList<AnnotationInfo>(); 
 
     /*----------------------------------------------------------------------*\
                                 Constructor
@@ -179,6 +188,16 @@ public class ClassInfo extends EmptyVisitor
     }
 
     /**
+     * Get the package name.
+     *
+     * @return the class name
+     */
+    public String getPackageName()
+    {
+        return packageName;
+    }
+
+    /**
      * Get the parent (super) class name, if any. Returns null if the
      * superclass is <tt>java.lang.Object</tt>. Note: To find other
      * ancestor classes, use {@link ClassFinder#findAllSuperClasses}.
@@ -234,7 +253,7 @@ public class ClassInfo extends EmptyVisitor
      *
      * @return the set of fields, if any.
      */
-    public Set<FieldInfo> getFields()
+    public Vector<FieldInfo> getFields()
     {
         return fields;
     }
@@ -244,11 +263,67 @@ public class ClassInfo extends EmptyVisitor
      *
      * @return the set of methods, if any
      */
-    public Set<MethodInfo> getMethods()
+    public Vector<MethodInfo> getMethods()
     {
         return methods;
     }
+	
+	public MethodInfo getMethod(MethodInfo findMethod) 
+	{
+		String signature = findMethod.getSignature();
+		String name = findMethod.getName();
+		for(MethodInfo method: methods)
+		{
+			if(method.getName().equals(name) && method.getSignature().equals(signature))
+				return method;
+		}
+		
+		return null;
+	}
 
+	public MethodInfo getMethod(String methodName) 
+	{
+		for(MethodInfo method: methods)
+		{
+			if(method.getName().equals(methodName))
+				return method;
+		}
+		
+		return null;
+	}
+
+	public void setBytecode(byte[] bytecode)
+	{
+		this.bytecode = bytecode;
+	}
+	
+	public byte[] getBytecode()
+	{
+		return this.bytecode;
+	}
+		
+	public void addAnnotation(AnnotationInfo annotation)
+	{
+		annotations.add(annotation);
+	}
+	
+	public List<AnnotationInfo> getAnnotations()
+	{
+		return annotations;
+	}
+	
+	public boolean isAnnotationPresent(String desc) {
+		AnnotationInfo ann = new AnnotationInfo();
+		ann.setClassName(desc);
+		return annotations.contains(ann);
+	}
+
+	public boolean isAnnotationPresent(Class<?> clazz) {
+		AnnotationInfo ann = new AnnotationInfo();
+		ann.setClassName(clazz.getName());
+		return annotations.contains(ann);
+	}
+	
     /**
      * Get a string representation of this object.
      *
@@ -367,7 +442,7 @@ public class ClassInfo extends EmptyVisitor
                                    name,
                                    description,
                                    signature,
-                                   exceptions));
+                                   exceptions, this));
         return null;
     }
 
@@ -404,6 +479,11 @@ public class ClassInfo extends EmptyVisitor
                                 File     location)
     {
         this.className = translateInternalClassName(name);
+        int idx = this.className.lastIndexOf('.');
+        if(idx>0)
+        	this.packageName = this.className.substring(0, idx);
+        else
+        	this.packageName = "";
         this.locationFound = location;
 
         if ((superClassName != null) &&
@@ -476,4 +556,23 @@ public class ClassInfo extends EmptyVisitor
 
         return modifier;
     }
+
+//    @Override
+//	public AnnotationVisitor visitAnnotation(String desc, boolean visible) {
+//    	Type annotation = Type.getType(desc);
+//    	annotations.add(annotation);
+//		return super.visitAnnotation(desc, visible);
+//	}
+//
+//	@Override
+//	public AnnotationVisitor visitAnnotation(String name, String desc) {
+//		// TODO Auto-generated method stub
+//		return super.visitAnnotation(name, desc);
+//	}
+//
+//	@Override
+//	public AnnotationVisitor visitAnnotationDefault() {
+//		// TODO Auto-generated method stub
+//		return super.visitAnnotationDefault();
+//	}
 }
